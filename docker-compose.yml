@@ -1,0 +1,68 @@
+# FiberNet — full stack in one command:  docker compose up --build
+#
+#   db        -> PostgreSQL + PostGIS (schema.sql auto-loaded on first boot)
+#   api       -> FastAPI backend (GeoJSON + spatial-analysis endpoints)
+#   geoserver -> GeoServer (publish the PostGIS tables as OGC WMS/WFS layers)
+#   web       -> nginx serving the Leaflet frontend
+#
+# Open:  frontend  http://localhost:8080
+#        API docs  http://localhost:8081/docs
+#        GeoServer http://localhost:8600/geoserver  (admin / geoserver)
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fibernet
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - fibernet_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fibernet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: fibernet
+      DB_USER: postgres
+      DB_PASS: postgres
+    ports:
+      - "8081:8081"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  geoserver:
+    image: kartoza/geoserver:2.24.0
+    environment:
+      GEOSERVER_ADMIN_USER: admin
+      GEOSERVER_ADMIN_PASSWORD: geoserver
+    ports:
+      - "8600:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - geoserver_data:/opt/geoserver/data_dir
+
+  web:
+    image: nginx:alpine
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  fibernet_db:
+  geoserver_data:

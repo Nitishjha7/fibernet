@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FiberNet — Network Coverage & Planning Map</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    #top { background: #0d1b2a; color: #fff; padding: 10px 16px; }
+    #top b { font-size: 16px; }
+    #top span { font-size: 12px; opacity: .8; margin-left: 10px; }
+    #wrap { display: flex; height: calc(100vh - 46px); }
+    #map { flex: 1; }
+    #side { width: 290px; background: #f7f9fb; border-left: 1px solid #e3e8ee; padding: 14px; overflow-y: auto; }
+    h3 { margin: 6px 0 8px; font-size: 13px; text-transform: uppercase; color: #0d6e6e; letter-spacing: .03em; }
+    .legend div { font-size: 13px; margin: 5px 0; display: flex; align-items: center; gap: 8px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+    .line { width: 16px; height: 3px; display: inline-block; }
+    .box { width: 14px; height: 12px; display: inline-block; border: 1px solid; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+    th, td { border-bottom: 1px solid #e3e8ee; padding: 5px 4px; text-align: left; }
+    th { color: #667; }
+    #hint { font-size: 12px; color: #556; margin-top: 10px; background: #eef6f6; padding: 8px; border-radius: 6px; }
+    #ans { font-size: 13px; margin-top: 8px; font-weight: 600; color: #0d6e6e; }
+  </style>
+</head>
+<body>
+  <div id="top"><b>FiberNet</b><span>Network coverage & planning — PostGIS + FastAPI + Leaflet</span></div>
+  <div id="wrap">
+    <div id="map"></div>
+    <div id="side">
+      <h3>Legend</h3>
+      <div class="legend">
+        <div><span class="box" style="background:#22c55e22;border-color:#16a34a"></span> Coverage zone</div>
+        <div><span class="line" style="background:#0d6e6e"></span> Fiber route</div>
+        <div><span class="dot" style="background:#ef4444"></span> Tower</div>
+        <div><span class="dot" style="background:#2563eb"></span> Customer (covered)</div>
+        <div><span class="dot" style="background:#f59e0b"></span> Customer (coverage gap)</div>
+      </div>
+      <h3 style="margin-top:16px">Zone stats</h3>
+      <table id="stats"><thead><tr><th>Zone</th><th>Fiber km</th><th>Cust.</th></tr></thead><tbody></tbody></table>
+      <div id="hint">Click anywhere on the map to find the <b>nearest tower</b>.</div>
+      <div id="ans"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script>
+    const API = "http://127.0.0.1:8081";
+    const map = L.map("map").setView([28.62, 77.24], 12);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
+
+    const get = (p) => fetch(API + p).then((r) => r.json());
+
+    // Zones (polygons)
+    get("/api/zones").then((g) =>
+      L.geoJSON(g, { style: { color: "#16a34a", weight: 1, fillColor: "#22c55e", fillOpacity: 0.12 } })
+        .bindPopup((l) => l.feature.properties.name).addTo(map)
+        .eachLayer((l) => l.bindPopup(l.feature.properties.name))
+    );
+    // Fiber routes (lines)
+    get("/api/routes").then((g) =>
+      L.geoJSON(g, { style: { color: "#0d6e6e", weight: 4 } })
+        .eachLayer((l) => l.bindPopup("Fiber: " + l.feature.properties.name)).addTo(map)
+    );
+    // Tower service-radius coverage (ST_Buffer polygons) — a toggleable overlay
+    let coverageLayer;
+    get("/api/tower-coverage?radius_km=3").then((g) => {
+      coverageLayer = L.geoJSON(g, {
+        style: { color: "#ef4444", weight: 1, dashArray: "4", fillColor: "#ef4444", fillOpacity: 0.06 },
+      }).addTo(map);
+
+      // OGC WMS layer served by GeoServer (see GEOSERVER_SETUP.md).
+      // Not added to the map by default — toggle it on once the layer is published.
+      const wms = L.tileLayer.wms("http://localhost:8600/geoserver/fibernet/wms", {
+        layers: "fibernet:zones", format: "image/png", transparent: true, version: "1.1.0",
+      });
+
+      L.control.layers(null, {
+        "Tower coverage (3 km)": coverageLayer,
+        "Zones via GeoServer WMS": wms,
+      }, { collapsed: false }).addTo(map);
+    });
+
+    // Towers (points) — popup enriched with how many customers each one serves (spatial join)
+    Promise.all([get("/api/towers"), get("/api/tower-customers?radius_km=3")]).then(([g, served]) => {
+      const byTower = {};
+      served.forEach((s) => (byTower[s.name] = s));
+      L.geoJSON(g, { pointToLayer: (f, ll) => {
+        const s = byTower[f.properties.name];
+        const extra = s ? `<br>Serves ${s.customer_count} customer(s): ${s.customers.join(", ") || "—"}` : "";
+        return L.circleMarker(ll, { radius: 8, color: "#991b1b", fillColor: "#ef4444", fillOpacity: 1 })
+          .bindPopup("📡 <b>" + f.properties.name + "</b>" + extra);
+      } }).addTo(map);
+    });
+    // Coverage gaps first, so we can colour those customers differently
+    get("/api/coverage-gaps").then((gaps) => {
+      const gapNames = new Set(gaps.features.map((f) => f.properties.name));
+      get("/api/customers").then((g) =>
+        L.geoJSON(g, { pointToLayer: (f, ll) => {
+          const gap = gapNames.has(f.properties.name);
+          return L.circleMarker(ll, { radius: 6, color: gap ? "#b45309" : "#1d4ed8",
+            fillColor: gap ? "#f59e0b" : "#2563eb", fillOpacity: 1 })
+            .bindPopup(f.properties.name + (gap ? " — ⚠️ coverage gap" : " — covered")); } }).addTo(map)
+      );
+    });
+
+    // Zone stats table
+    get("/api/zone-stats").then((rows) => {
+      const tb = document.querySelector("#stats tbody");
+      tb.innerHTML = rows.map((r) => `<tr><td>${r.name}</td><td>${r.fiber_km}</td><td>${r.customers}</td></tr>`).join("");
+    });
+
+    // Click -> nearest tower (draw a line to it)
+    let link, mk;
+    map.on("click", async (e) => {
+      const { lat, lng } = e.latlng;
+      const g = await get(`/api/nearest-tower?lat=${lat}&lng=${lng}`);
+      const f = g.features[0];
+      const [tlng, tlat] = f.geometry.coordinates;
+      if (link) map.removeLayer(link);
+      if (mk) map.removeLayer(mk);
+      mk = L.circleMarker([lat, lng], { radius: 5, color: "#000" }).addTo(map);
+      link = L.polyline([[lat, lng], [tlat, tlng]], { color: "#7c3aed", dashArray: "6" }).addTo(map);
+      document.getElementById("ans").textContent =
+        `Nearest tower: ${f.properties.name} (${f.properties.distance_km} km)`;
+    });
+  </script>
+</body>
+</html>
