@@ -11,6 +11,12 @@ I built this to go deeper into geospatial development on top of a Python +
 PostgreSQL stack. It uses all three core geometry types and the main PostGIS
 operations.
 
+## Screenshots
+
+| Overview | Click -> nearest tower | GeoServer WMS layer on |
+|---|---|---|
+| ![overview](docs/screenshot-overview.png) | ![nearest](docs/screenshot-nearest-tower.png) | ![wms](docs/screenshot-geoserver-wms.png) |
+
 ## What you can do on the map
 
 - See towers, fiber routes, coverage zones and customers as layers.
@@ -71,6 +77,10 @@ This starts four services together:
 | `geoserver` | http://localhost:8600/geoserver | publish the tables as OGC WMS/WFS |
 
 GeoServer publishing steps are in **[GEOSERVER_SETUP.md](GEOSERVER_SETUP.md)**.
+
+Stop with `docker compose down` (add `-v` to also wipe the database volume).
+The first start takes a minute or two (images download, GeoServer boots). If the
+map loads but shows no data, wait a few seconds and refresh.
 
 ## Run it locally (without Docker)
 

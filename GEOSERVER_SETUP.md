@@ -34,7 +34,7 @@ GeoServer admin:  **http://localhost:8600/geoserver**  (user `admin`, pass `geos
   **“Zones via GeoServer WMS”** — the frontend already points at
   `http://localhost:8600/geoserver/fibernet/wms`, layer `fibernet:zones`.
 
-## WMS vs WFS (know this for the interview)
+## WMS vs WFS
 
 | | What it returns | Use |
 |---|---|---|
@@ -46,9 +46,3 @@ Example WFS request (raw features as GeoJSON):
 ```
 http://localhost:8600/geoserver/fibernet/ows?service=WFS&version=2.0.0&request=GetFeature&typeName=fibernet:zones&outputFormat=application/json
 ```
-
-## One-line summary for the interview
-
-> "PostGIS holds the data, FastAPI serves my own GeoJSON APIs, and GeoServer
-> publishes the same tables as standard OGC **WMS/WFS** so any GIS client can
-> consume them — all wired together with Docker Compose."
