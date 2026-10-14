@@ -1,8 +1,8 @@
-# FiberNet — Telecom Network Coverage & Planning Map
+# FiberNet - Telecom Network Coverage & Planning Map
 
 A GIS application for telecom-style network planning, built with **PostGIS +
-FastAPI + Leaflet**. It models a small fiber network — **towers** (points),
-**fiber routes** (lines) and **coverage zones** (polygons) — and runs the kind
+FastAPI + Leaflet**. It models a small fiber network - **towers** (points),
+**fiber routes** (lines) and **coverage zones** (polygons) - and runs the kind
 of spatial analysis a planning team actually needs: nearest tower, which routes
 cross a zone, how much fiber runs through each zone, and which customers fall in
 a **coverage gap**.
@@ -45,7 +45,7 @@ Geometry types used: **Point** (towers, customers), **LineString** (fiber),
 ## Stack
 
 - **Database:** PostgreSQL + PostGIS
-- **Backend:** FastAPI — serves each layer as GeoJSON + the analysis endpoints
+- **Backend:** FastAPI - serves each layer as GeoJSON + the analysis endpoints
 - **Frontend:** Leaflet.js + OpenStreetMap
 - **OGC services:** GeoServer publishes the PostGIS tables as WMS/WFS
 - **Orchestration:** Docker Compose (db + api + geoserver + web)
@@ -61,7 +61,7 @@ Geometry types used: **Point** (towers, customers), **LineString** (fiber),
 | `/api/tower-coverage?radius_km=` | each tower's service-radius polygon (`ST_Buffer`) |
 | `/api/tower-customers?radius_km=` | customers served per tower (spatial join) |
 
-## Run it with Docker (recommended — one command)
+## Run it with Docker (recommended - one command)
 
 ```bash
 docker compose up --build
@@ -115,4 +115,3 @@ python -m http.server 8080
 ## Notes
 
 - The passwords in `docker-compose.yml` / `.env.example` are local development defaults only. Change them for any real deployment.
-- A simpler earlier version of this idea (radius search on a single `places` table) is in [postgis-nearby-places](https://github.com/Nitishjha7/postgis-nearby-places).
